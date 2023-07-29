@@ -1,74 +1,86 @@
 import { Server, Socket } from 'socket.io'
-import { IPlayer, IResponseData, IStartRoundData } from './interface'
-import { getPlayer, players } from './players'
+import { IPlayer, IStartRoundData } from './interface'
+import { players } from './players'
 import { incrementTurn, playersArr, playing, resetTurns, turnIndex } from './constants'
-import { setResponse, shuffle } from './utils'
+import { shuffle } from './utils'
 
-const onConnection = (io: Server, socket: Socket) => {
+const onConnection = (io: Server, socket: Socket,) => {
+
+    console.log(`${socket.id} just connected`)
 
     let emitTimeout: NodeJS.Timeout | undefined
-    let title: string = "name"
 
     const connect = (data: { name: string }) => {
 
-        const playerData: IPlayer = {
-            id: socket.id,
-            userName: data.name,
-            score: 0,
-            response: {
-                animal: '',
-                place: '',
-                thing: '',
-                food: ''
+        try {
+
+            const playerData: IPlayer = {
+                id: socket.id,
+                userName: data.name,
+                score: 0,
+
             }
+
+            socket.data = playerData
+
+            console.log("socket data", socket.data)
+
+            players.set(socket.id, playerData)
+
+            console.log("sockets map", players)
+
+            players.size == 4 ? playersArr.splice(0, 0, ...shuffle(players.values())) :
+
+                console.log("players array", playersArr)
+
+            players.size >= 5 ? playersArr.push(playerData) : null
+
+            socket.broadcast.emit("new_player", { message: `${data.name} is now Online` })
+
+            players.size == 4 && !playing ? io.emit("game_ready", { playersArr }) : null
+
+        } catch (error) {
+            console.error(error)
         }
-
-        socket.data = playerData
-
-        players.set(socket.id, playerData)
-
-        players.size == 4 ? playersArr.splice(0, 0, ...shuffle(players.values())) : null
-
-        players.size >= 5 ? playersArr.push(playerData) : null
-
-        socket.broadcast.emit("new_player", { message: `${data.name} is now Online` })
-
-        players.size == 4 && !playing ? io.emit("game_ready", { playersArr }) : null
     }
 
     const startRound = (data: IStartRoundData) => {
+        try {
+            console.log("updated players array", playersArr)
 
-        playersArr.length - 1 > turnIndex ? resetTurns() : null
+            playersArr.length - 1 > turnIndex ? resetTurns() : null
 
-        if (playersArr[turnIndex].id == socket.id) {
-            socket.broadcast.emit("round_start", { letter: data.letter })
-            emitTimeout ? clearTimeout(emitTimeout) : null
+            if (playersArr[turnIndex].id == socket.id) {
+                socket.broadcast.emit("round_start", { letter: data.letter, player: data.player })
+                emitTimeout ? clearTimeout(emitTimeout) : null
 
-            emitTimeout = setTimeout(() => {
-                io.emit("round_stop",)
-            }, 60000)
-            incrementTurn()
+                emitTimeout = setTimeout(() => {
+                    io.emit("round_stop",)
+                }, 60000)
+                incrementTurn()
 
-        } else {
-            socket.emit("error", { message: "Not this players turn" })
+            } else {
+                socket.emit("error", { message: "Not this players turn" })
+            }
+        } catch (error) {
+            console.error(error)
         }
     }
 
     const stopRound = () => {
-        emitTimeout ? clearTimeout(emitTimeout) : null
-        io.emit("round_stop")
+        try {
+
+            emitTimeout ? clearTimeout(emitTimeout) : null
+            io.emit("round_stop")
+
+        } catch (error) {
+            console.error(error)
+        }
     }
 
-    const saveResponses = ( data: IResponseData) => {
-        const player = getPlayer(socket.id)
-
-        player ? setResponse(socket.id, data) : socket.emit("error", { message: "Unable to save response, player not found" })
-    }
-
-    socket.on("responses", saveResponses)
     socket.on("round_stop", stopRound)
     socket.on("round_start", startRound)
-    socket.on("connection", connect)
+    socket.on("player_connect", connect)
 }
 
 export {

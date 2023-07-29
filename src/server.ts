@@ -12,6 +12,6 @@ const io = new Server( httpServer, {
 
 io.on('connection', socket => onConnection(io, socket))
 
-app.listen(3000, "0.0.0.0", () => {
+httpServer.listen(3000, () => {
     log("Server running on port 3000")
 })

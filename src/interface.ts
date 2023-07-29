@@ -2,7 +2,7 @@ interface IPlayer {
     id: string
     userName: string
     score?: number
-    response: IResponseData
+
 }
 
 interface IStartRoundData {

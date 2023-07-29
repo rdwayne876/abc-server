@@ -10,15 +10,6 @@ const shuffle = (iterable: Iterable<unknown> | ArrayLike<unknown>) => {
     return array;
 }
 
-const setResponse = (socketId: string, data: IResponseData) => {
-    const player = players.get(socketId)
-
-    player ? player.response = data : null
-
-    return player
-}
-
 export {
     shuffle,
-    setResponse
 }
