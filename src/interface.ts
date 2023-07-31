@@ -2,7 +2,6 @@ interface IPlayer {
     id: string
     userName: string
     score?: number
-
 }
 
 interface IStartRoundData {
@@ -10,6 +9,7 @@ interface IStartRoundData {
     letter: string
 }
 interface IResponseData {
+    userName?: string
     animal: string,
     place: string,
     thing: string,
