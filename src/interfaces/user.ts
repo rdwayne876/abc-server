@@ -11,6 +11,7 @@ export interface Tokens {
 }
 
 export interface IUser {
+    [x: string]: any;
 	email: string;
 	password: string;
 	passwordResetToken: string;
@@ -22,7 +23,7 @@ export interface IUser {
 	github: string;
 	instagram: string;
 	linkedin: string;
-	tokens: Tokens[];
+	tokens?: Tokens[];
 	steam: string;
 
 	username: string;
