@@ -7,11 +7,11 @@
 import * as jwt from 'jsonwebtoken';
 import { ValidationChain, body, validationResult } from 'express-validator';
 
-import User from '../../../schema/user';
+import User from '../../schema/user';
 import { NextFunction, Request, Response } from 'express';
-import IUser from '../../../interfaces/user';
-import { JsonResponse } from '../../../helpers/JsonResponse.helper';
-import HttpStatusCode from '../../../helpers/StatusCodes.helper';
+import IUser from '../../interfaces/user';
+import { JsonResponse } from '../../helpers/JsonResponse.helper';
+import HttpStatusCode from '../../helpers/StatusCodes.helper';
 
 class AuthController {
     static loginValidations:ValidationChain[] = [

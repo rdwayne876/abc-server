@@ -8,7 +8,7 @@ import { Router } from 'express';
 // import * as expressJwt from 'express-jwt';
 
 import Locals from '../providers/locals';
-import AuthController from '../controllers/api/auth/auth.controller';
+import AuthController from '../controllers/api/auth.controller';
 
 // import HomeController from '../controllers/Api/Home';
 // import RegisterController from '../controllers/Api/Auth/Register';
