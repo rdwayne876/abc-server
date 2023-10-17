@@ -4,9 +4,11 @@
  * @author Faiz A. Farooqui <faiz@geekyants.com>
  */
 
-import { Application, NextFunction, Request, Response } from 'express';
+import { Application, ErrorRequestHandler, NextFunction, Request, Response } from 'express';
 import Log from '../middlewares/log';
 import Locals from '../providers/locals';
+import { JsonResponse } from '../helpers/JsonResponse.helper';
+import HttpStatusCode from '../helpers/StatusCodes.helper';
 
 class Handler {
 	/**
@@ -15,14 +17,12 @@ class Handler {
 	public static notFoundHandler(_express:Application): any {
 		const apiPrefix = Locals.config().apiPrefix;
 
-		_express.use('*', (req, res) => {
-			const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+		_express.use('*', (req:Request, res:Response) => {
+			const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
 			Log.error(`Path '${req.originalUrl}' not found [IP: '${ip}']!`);
 			if (req.xhr || req.originalUrl.includes(`/${apiPrefix}/`)) {
-				return res.json({
-					error: 'Page Not Found'
-				});
+				return JsonResponse.error(res, "Page Not Found",[], HttpStatusCode.NOT_FOUND)
 			} else {
 				res.status(404);
 				return res.render('pages/error', {
@@ -42,7 +42,7 @@ class Handler {
 		Log.error(err.stack);
 
 		if (req.xhr) {
-			return res.status(500).send({error: 'Something went wrong!'});
+			return JsonResponse.error(res, "Something went wrong!", [], HttpStatusCode.INTERNAL_SERVER_ERROR);
 		} else {
 			return next(err);
 		}
@@ -51,26 +51,18 @@ class Handler {
 	/**
 	 * Show undermaintenance page incase of errors
 	 */
-	public static errorHandler(err: { stack: string; name: string; inner: { message: any; }; }, req: { originalUrl: string | string[]; }, res: { status: (arg0: number) => void; json: (arg0: { error: any; }) => any; render: (arg0: string, arg1: { error: any; title: string; }) => any; }, next: any): any {
-		Log.error(err.stack);
-		res.status(500);
+	public static errorHandler(err: { stack: string; name: string; inner: { message: any; }; }, req: Request, res: Response, next: NextFunction) {
+
 
 		const apiPrefix = Locals.config().apiPrefix;
 		if (req.originalUrl.includes(`/${apiPrefix}/`)) {
 
 			if (err.name && err.name === 'UnauthorizedError') {
 				const innerMessage = err.inner && err.inner.message ? err.inner.message : undefined;
-				return res.json({
-					error: [
-						'Invalid Token!',
-						innerMessage
-					]
-				});
+				return JsonResponse.error(res, "Unauthorized access attempted", [innerMessage], HttpStatusCode.UNAUTHORIZED)
 			}
 
-			return res.json({
-				error: err
-			});
+			return JsonResponse.error(res, "An error occurred with the request", [err], HttpStatusCode.INTERNAL_SERVER_ERROR)
 		}
 
 		return res.render('pages/error', { error: err.stack, title: 'Under Maintenance' });
@@ -80,7 +72,7 @@ class Handler {
 	 * Register your error / exception monitoring
 	 * tools right here ie. before "next(err)"!
 	 */
-	public static logErrors(err: { stack: string; }, req: any, res: any, next: (arg0: any) => any): any {
+	public static logErrors(err: any, req: Request, res: Response, next: NextFunction) {
 		Log.error(err.stack);
 
 		return next(err);
