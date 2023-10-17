@@ -10,6 +10,8 @@ import { ValidationChain, body, validationResult } from 'express-validator';
 import User from '../../../schema/user';
 import { NextFunction, Request, Response } from 'express';
 import IUser from '../../../interfaces/user';
+import { JsonResponse } from '../../../helpers/JsonResponse.helper';
+import HttpStatusCode from '../../../helpers/StatusCodes.helper';
 
 class AuthController {
     static loginValidations:ValidationChain[] = [
@@ -34,7 +36,7 @@ class AuthController {
                 await Promise.all(this.loginValidations.map(validation => validation.run(req)))
                 const errors = validationResult(req);
                 if (!errors.isEmpty()) {
-                    return res.status(400).json({ errors: errors.array() });
+                    return JsonResponse.error(res,"Invalid data fields", errors.array());
 
                 }
 
@@ -43,28 +45,20 @@ class AuthController {
 
                 let user = await User.findOne({email: _email});
                 if (!user) {
-                    return res.json({
-                        error: ['User not found!']
-                    });
+                    return JsonResponse.error(res, "No matching records found", ["User does not exist in database"], HttpStatusCode.NOT_FOUND)
                 }
                 else{
                     if (! user.password) {
-                        return res.json({
-                            error: ['Please login using your social creds']
-                        });
+                        return JsonResponse.error(res, "Please enter password", ['Please login using your social creds']);
                     }
         
                         user.comparePassword(_password, (err: Error, isMatch:boolean) => {
                             if (err) {
-                                return res.json({
-                                    error: err
-                                });
+                                return JsonResponse.error(res, "Invalid credentitals", [err]);
                             }
         
                             if (! isMatch) {
-                                return res.json({
-                                    error: ['Password does not match!']
-                                });
+                                return JsonResponse.error(res, "Invalid credentials try again", ["Passwords do not match"]);
                             }
                             const token = jwt.sign(
                                 { email: _email, password: _password },
@@ -80,17 +74,11 @@ class AuthController {
         
         
         
-                            return res.json({
-                                user: newObj,
-                                token,
-                                token_expires_in: res.locals.app.jwtExpiresIn * 60
-                            });
+                            return JsonResponse.success(res,"Login Successfully", {user:newObj, token, token_expires_in: res.locals.app.jwtExpiresIn * 60});
                         });
                     }   
             }catch(err:any){
-                return res.status(500).json({
-                    error: err
-                });
+                return JsonResponse.error(res, "Something happenned, try again", [err],HttpStatusCode.INTERNAL_SERVER_ERROR)
             }
         }  
     }
@@ -111,9 +99,7 @@ class AuthController {
 
 		const errors = validationResult(req);
 		if (!errors.isEmpty()) {
-			return res.status(400).json({
-				error: errors
-			});
+            return JsonResponse.error(res,"Invalid data fields", errors.array());
 		}
 
 		const _email = req.body.email.toLowerCase();
@@ -126,20 +112,15 @@ class AuthController {
         try{
             let existingUser = await User.findOne({ email: _email });
             if(existingUser){
-                return res.json({
-					error: ['Account with the e-mail address already exists.']
-				});
+                return JsonResponse.error(res, "Account with the e-mail address already exists");
             }else{
               let userData = await newUser.save(); 
-              return res.json({
-                data: userData
-            });
+              return JsonResponse.success(res,"User registered successfully", userData );
             }
 
         }catch(err:any){
-            return res.status(500).json({
-                error: err
-            });
+            return JsonResponse.error(res, "Something happenned, try again", [err],HttpStatusCode.INTERNAL_SERVER_ERROR)
+
         }
 			
     }
