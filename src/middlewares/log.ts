@@ -52,7 +52,7 @@ class Log {
 	private addLog (_kind: string, _string: string): void {
 		const _that = this;
 		_kind = _kind.toUpperCase();
-		fs.open(`${_that.baseDir}${_that.fileName}`, 'a', (_err, _fileDescriptor) => {
+		fs.open(`${_that.baseDir}${_that.fileName}`, 'w+', (_err, _fileDescriptor) => {
 			if (!_err && _fileDescriptor) {
 				// Append to file and close it
 				fs.appendFile(_fileDescriptor, `${_that.linePrefix} [${_kind}] ${_string}\n`, (_err) => {
