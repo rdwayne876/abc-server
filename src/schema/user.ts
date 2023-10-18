@@ -4,10 +4,9 @@
  * @author Faiz A. Farooqui <faiz@geekyants.com>
  */
 
-import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
 
-import { IUser } from '../interfaces/user';
+import { IUser, userStatusMap } from '../interfaces/user';
 import mongoose from '../providers/database';
 
 // Create the model schema & register your custom methods here
@@ -25,8 +24,8 @@ export const UserSchema = new mongoose.Schema<IUserModel>({
 	passwordResetToken: { type: String },
 	passwordResetExpires: Date,	
     username: { type: String },
-	gender: { type: String },
-	points: { type: Number }
+	status: { type: Number, enum: Object.keys(userStatusMap), default: 0 },
+	points: { type: Number, default:0 }
 }, {
 	timestamps: true
 });

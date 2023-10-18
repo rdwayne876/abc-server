@@ -61,7 +61,7 @@ class AuthController {
                                 return JsonResponse.error(res, "Invalid credentials try again", ["Passwords do not match"]);
                             }
                             const token = jwt.sign(
-                                { email: _email, password: _password },
+                                { email: _email, id: user?.id },
                                 res.locals.app.appSecret,
                                 { expiresIn: res.locals.app.jwtExpiresIn * 60 }
                             );
@@ -89,6 +89,7 @@ class AuthController {
             let registerValidations:ValidationChain[] = [
                 body('email', 'E-mail cannot be blank').notEmpty(),
                 body('email', 'E-mail is not valid').isEmail(),
+                body('username', 'Username cannot be blank').notEmpty(),
                 body('password', 'Password cannot be blank').notEmpty(),
                 body('password', 'Password length must be atleast 8 characters').isLength({ min: 8 }),
                 body('confirmPassword', 'Confirmation Password cannot be blank').notEmpty(),

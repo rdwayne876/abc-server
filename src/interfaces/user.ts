@@ -34,4 +34,11 @@ export interface IUser {
 	picture: string;
 }
 
+export const userStatusMap = new Map([
+    [0, "Inactive"],
+    [1, "Active"],
+    [2, "Online"],
+    [3, "Offline"]
+]);
+
 export default IUser;
