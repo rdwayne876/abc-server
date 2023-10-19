@@ -10,6 +10,7 @@ import Locals from './locals';
 import Routes from './routes';
 import Bootstrap from '../middlewares/kernel';
 import ExceptionHandler from '../exception/handler';
+import { SocketServer } from './socket';
 
 class Express {
 	/**
@@ -58,9 +59,10 @@ class Express {
 		this.express.use(ExceptionHandler.clientErrorHandler);
 		this.express.use(ExceptionHandler.errorHandler);
 		this.express = ExceptionHandler.notFoundHandler(this.express);
-
+		// Mount the socket server to the expreses application.
+		let server = SocketServer.mountSocket(this.express);
 		// Start the server on the specified port
-		this.express.listen(port, () => {
+		server.listen(port, () => {
 			return console.log('\x1b[33m%s\x1b[0m', `Server :: Running @ 'http://localhost:${port}'`);
 		}).on('error', (_error) => {
 			return console.log('Error: ', _error.message);
