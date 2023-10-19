@@ -13,11 +13,6 @@ import Locals from '../providers/locals';
 class CORS {
 
 	
-	allowedOrigins = ['http://localhost:3000'];
-
-	corsOptions: cors.CorsOptions = {
-		origin: this.allowedOrigins
-	};
 	public mount(_express: Application): Application {
 		Log.info('Booting the \'CORS\' middleware...');
 
@@ -26,7 +21,7 @@ class CORS {
 			optionsSuccessStatus: 200		// Some legacy browsers choke on 204
 		};
 
-		_express.use(cors(this.corsOptions));
+		_express.use(cors(options));
 
 		return _express;
 	}
