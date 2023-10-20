@@ -8,13 +8,15 @@ export interface IRoom{
     voting_duration: number;
     round_duration:number;
     gameFields: string[];
+    round_limit: number;
     status: number;
     privacy: number;
 }
 
 export const roomStatusMap = new Map([
     [0, "Online"],
-    [1, "Offline"]
+    [1, "Offline"],
+    [2, "InProgress"]
 ]);
 
 export const roomPrivacyMap = new Map([

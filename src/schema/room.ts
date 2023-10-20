@@ -8,6 +8,7 @@ const roomSchema = new Schema<IRoom>({
     player_limit: {type: Number, default:5},
     voting_duration: {type: Number, default:30},
     round_duration:{type: Number, default: 30},
+    round_limit: {type:Number, default:10},
     gameFields: {type: [String], default: ["Girl Name", "Boy Name", "Animal", "Place", "Thing"]},
     status: {type: Number, enum: Object.keys(roomStatusMap), default:0},
     privacy: {type:Number, enum: Object.keys(roomPrivacyMap), default: 0},
