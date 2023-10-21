@@ -17,7 +17,8 @@ class CORS {
 		Log.info('Booting the \'CORS\' middleware...');
 
 		const options = {
-			origin: Locals.config().url,
+			// if the cors is enabled then it will set the origin if not it will allow every request to pass through
+			origin: Locals.config().isCORSEnabled ? Locals.config().url: "*",
 			optionsSuccessStatus: 200		// Some legacy browsers choke on 204
 		};
 

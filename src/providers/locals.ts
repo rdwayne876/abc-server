@@ -30,7 +30,7 @@ class Locals {
 		const company = process.env.COMPANY_NAME || 'GeekyAnts';
 		const description = process.env.APP_DESCRIPTION || 'Here goes the app description';
 
-		const isCORSEnabled = process.env.CORS_ENABLED || true;
+		const isCORSEnabled = (process.env.CORS_ENABLED == "false") ? false: true;
 		const jwtExpiresIn = process.env.JWT_EXPIRES_IN || 3;
 		const apiPrefix = process.env.API_PREFIX || 'api';
 
