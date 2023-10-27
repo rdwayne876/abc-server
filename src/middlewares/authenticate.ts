@@ -14,7 +14,7 @@ export const isAuthorized = (req:Request, res:Response, next:NextFunction)=>{
             if(!decodedToken){
                 return JsonResponse.error(res, "Unauthroized access attempted", ["Failed to authenticate token"], HttpStatusCode.UNAUTHORIZED);
             }
-            req.user = decodedToken; // Attach user information to the request
+            req.user= decodedToken; // Attach user information to the request
 
         }catch(error:any){
             return JsonResponse.error(res, "Unable to process request", [error], HttpStatusCode.INTERNAL_SERVER_ERROR);
