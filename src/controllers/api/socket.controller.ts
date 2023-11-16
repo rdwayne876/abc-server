@@ -18,17 +18,16 @@ export class SocketController{
             
             console.log(socket.id);
             socket.emit("Connected");
-
-
-            // socket.on("connect-room", (socket)=>)
         });
+        
+
 
         // io.of("/gameroom/room_").use((socket, next)=>{
         //     console.log("No one will pass");
         //     next(new Error("I won't let anything pass"));
         // })
         io.of('/gameroom').on('connection', async(socket)=>{
-            socket.on('join-room', async(userInfo: UserInfo)=>{
+            socket.on('join_room', async(userInfo: UserInfo)=>{
                 try{
                    
                     /**
@@ -51,17 +50,18 @@ export class SocketController{
                      * Get all the users/sockets currently connected to the room via room id.
                      * Broadcast to all the users the total number of users until game begins.
                     */
-                    let room = await Room.findById(userInfo.room_id);
+                    let room = await Room.findById((userInfo.room_id));
                     if(!room){
-                        socket.emit("room-connect-error");
+                        socket.emit("room_connect_error", "No rooom matches this room id");
                     }
-                    if(!(roomStatusMap.get(room?.status!) == "Online") ){
-                        socket.emit("room-connect-error", "Room is currently unavailable");
+                    let roomStatusStr = roomStatusMap.get(0);
+                    if(!(roomStatusStr === "Online")){
+                        socket.emit("room_connect_error", "Room is currently unavailable");
                     }
 
                     //Create user Object.
                     //Token will contain userData like {email, id, username}
-                    let userdata:{email:string, username:string, id: string} = JSON.parse(atob(userInfo.token));
+                    let userdata:TokenData = JSON.parse(atob(userInfo.data));
                     //
 
                     // io.socketsJoin(userInfo.room_id);
@@ -74,24 +74,34 @@ export class SocketController{
                             connectedSockets[rand].leave(userInfo.room_id); //ah so unfortunate lol.
                         }else{
                             // emit to socket that they cannot connect
-                            socket.emit("room-connect-error", "Room limit reached");
+                            socket.emit("room_connect_error", "Room limit reached");
                         }
                     }
                     socket.join(userInfo.room_id);
 
 
 
-                    // socket.broadcast.to(userInfo.room_id).emit("player-connected", room);
+                    // socket.broadcast.to(userInfo.room_id).emit("player_connected", room);
                     let sockets = await socket.nsp.in(userInfo.room_id).fetchSockets();
-                    socket.data = userdata;
+                    // set initial user data
+                    let initialUserData = {
+                        email: userdata.email,
+                        username: userdata.username,
+                        id: userdata.id,
+                        points: 0,
+                        isDictator:false,
+                        current_round: 0,
+                    }
+                    socket.data = {user: initialUserData};
                     // emit to all connected players the data of those who are currently connected to the room.
-                    socket.nsp.to(userInfo.room_id).emit('player-connected',{players : sockets.map((socket)=>socket.data), isFull: room?.player_limit == sockets.length});
+                    socket.nsp.to(userInfo.room_id).emit('player_connected',{players : sockets.map((socket)=>socket.data.user), isFull: room?.player_limit == sockets.length});
                 }catch(error:any){
-                    socket.emit('room-connect-error', "Unable to connect with this id")
+                    console.log(error)
+                    socket.emit('room_connect_error', "Unable to connect with this id")
                 }
             });
 
-            socket.on('start-game', async(userInfo: UserInfo)=>{
+            socket.on('start_game', async(userInfo: UserInfo)=>{
                 /**
                  * TODO:
                  * 
@@ -110,107 +120,107 @@ export class SocketController{
 
                 let room = await Room.findById(userInfo.room_id);
                 if(!room){
-                    socket.emit("room-connect-error", "No matching rooms found");
+                    socket.emit("room_connect_error", "No matching rooms found");
                 }
                 if(!(roomStatusMap.get(room?.status!) == "Online") ){
-                    socket.emit("room-connect-error", "Room is currently unavailable");
+                    socket.emit("room_connect_error", "Room is currently unavailable");
                 }
-                let userdata:{email:string, username:string, id: string, selected_letter: string, timeout:number} = JSON.parse(atob(userInfo.token));
+                let userdata:{email:string, username:string, id: string, selected_letter: string, timeout:number} = JSON.parse(atob(userInfo.data));
 
                 let connectedSockets = await socket.nsp.in(userInfo.room_id).fetchSockets();
 
                 
                 //If the total number of client doesn't match the room limit and client is not the creator.Then do nothing.
                 if(room?.player_limit != connectedSockets.length && !(room?.creator! == (userdata.id as unknown as ObjectId))){
-                        socket.emit("room-connect-error", "Client doesn't have permission to start game before all sockets are connected");
+                        socket.emit("room_connect_error", "Client doesn't have permission to start game before all sockets are connected");
                 }
                 // Change room status to inProgress
 
                 room?.updateOne({status: getKeyByValue(roomStatusMap,"InProgress")});
-                // choose dictator and emit choose-letter event.
+                // choose dictator and emit choose_letter event.
 
-                
-                SocketController.chooseDictatorAndEmitEvent(connectedSockets, "choose-letter");
+                SocketController.chooseDictatorAndEmitEvent(connectedSockets, "choose_letter");
                 
 
             });
 
-            socket.on('letter-selected', async (userInfo:UserInfo)=>{
+            socket.on('letter_selected', async (userInfo:UserInfo)=>{
                 let room = await Room.findById(userInfo.room_id);
                 if(!room){
-                    socket.emit("room-connect-error", "No matching rooms found");
+                    socket.emit("room_connect_error", "No matching rooms found");
                 }
                 if(!(roomStatusMap.get(room?.status!) == "InProgress") ){
-                    socket.emit("room-connect-error", "Action not permitted");
+                    socket.emit("room_connect_error", "Action not permitted");
                 }
 
-                let userdata:TokenData = JSON.parse(atob(userInfo.token));
+                let userdata:TokenData = JSON.parse(atob(userInfo.data));
 
                 let connectedSockets = await socket.nsp.in(userInfo.room_id).fetchSockets();
                 let isDictator = connectedSockets.find((socket)=> (socket.data as SocketData).user.isDictator && (socket.data as SocketData).user.id === userdata.id);
                 if(!isDictator){
-                    socket.emit("room-connect-error", "Client does not have permission to start round please wait until letter is selected")
+                    socket.emit("room_connect_error", "Client does not have permission to start round please wait until letter is selected")
                 };
+
                 socket.nsp.in(userInfo.room_id).emit("countdown", {selected_letter: userdata.selected_letter});
             })
 
-            socket.on('start-round', async (userInfo:UserInfo)=>{
+            socket.on('start_round', async (userInfo:UserInfo)=>{
                 /**
                  * TODO:
                  * Broadcast Selected letter to the clients attached.
                  * Get room data and have a countdown using the round duration
-                 * After the countdown emit a stop-round event
+                 * After the countdown emit a stop_round event
                  */
 
                 let room = await Room.findById(userInfo.room_id);
                 if(!room){
-                    socket.emit("room-connect-error", "No matching rooms found");
+                    socket.emit("room_connect_error", "No matching rooms found");
                 }
                 if(!(roomStatusMap.get(room?.status!) == "InProgress") ){
-                    socket.emit("room-connect-error", "Action not permitted");
+                    socket.emit("room_connect_error", "Action not permitted");
                 }
 
-                let userdata:TokenData = JSON.parse(atob(userInfo.token));
+                let userdata:TokenData = JSON.parse(atob(userInfo.data));
 
                 let connectedSockets = await socket.nsp.in(userInfo.room_id).fetchSockets();
                 let isDictator = connectedSockets.find((socket)=> (socket.data as SocketData).user.isDictator && (socket.data as SocketData).user.id === userdata.id);
                 if(!isDictator){
-                    socket.emit("room-connect-error", "Client does not have permission to start round please wait until letter is selected")
+                    socket.emit("room_connect_error", "Client does not have permission to start round please wait until letter is selected")
                 };
                 userdata.timeout = room?.round_duration!;
 
                 // emit to everyone in the room that they should stop after timeout
-                
                 let round_timeout = setTimeout(()=>{
-                    socket.nsp.to(userInfo.room_id).emit("stop-round");
-                }, userdata.timeout);
+                    console.log("stop round")
+                    socket.nsp.to(userInfo.room_id).emit("stop_round");
+                }, userdata.timeout * 1000);
 
                 // persist the timeout id to clear timeout if the user wishes to end round before the timeout completes.
                 SocketController.TimeoutMap.set(userInfo.room_id, round_timeout);
 
             });
-            socket.on('stop-round', async(userInfo:UserInfo)=>{
+            socket.on('stop_round', async(userInfo:UserInfo)=>{
                 /**
                  * TODO:
                  * This listener is for persons that wish to stop the round before timer.
                  * If the client that selects this option is the person assigned as Dictator.
-                 * This will broadcast a stop-round event which overides previous round_duration. 
+                 * This will broadcast a stop_round event which overides previous round_duration. 
                  */
 
                 let room = await Room.findById(userInfo.room_id);
                 if(!room){
-                    socket.emit("room-connect-error", "No matching rooms found");
+                    socket.emit("room_connect_error", "No matching rooms found");
                 }
                 if(!(roomStatusMap.get(room?.status!) == "InProgress") ){
-                    socket.emit("room-connect-error", "Action not permitted");
+                    socket.emit("room_connect_error", "Action not permitted");
                 }
 
-                let userdata:TokenData = JSON.parse(atob(userInfo.token));
+                let userdata:TokenData = JSON.parse(atob(userInfo.data));
 
                 let connectedSockets = await socket.nsp.in(userInfo.room_id).fetchSockets();
                 let isDictator = connectedSockets.find((socket)=> (socket.data as SocketData).user.isDictator && (socket.data as SocketData).user.id === userdata.id);
                 if(!isDictator){
-                    socket.emit("room-connect-error", "Client does not have permission to start round please wait until letter is selected")
+                    socket.emit("room_connect_error", "Client does not have permission to start round please wait until letter is selected")
                 };
                 // checks the timout map to see if there is a timeout for this room then clears the timeout
                 if(SocketController.TimeoutMap.has(userInfo.room_id)){
@@ -218,9 +228,9 @@ export class SocketController{
                     SocketController.TimeoutMap.delete(userInfo.room_id);
 
                 }
-                socket.nsp.to(userInfo.room_id).emit("stop-round");
+                socket.nsp.to(userInfo.room_id).emit("stop_round");
             });
-            socket.on('start-voting', async (userInfo:UserInfo)=>{
+            socket.on('start_voting', async (userInfo:UserInfo)=>{
                 /**
                  * TODO:
                  * This listener will accept the user/responses and fields as key value pair.
@@ -229,16 +239,16 @@ export class SocketController{
 
                 let room = await Room.findById(userInfo.room_id);
                 if(!room){
-                    socket.emit("room-connect-error", "No matching rooms found");
+                    socket.emit("room_connect_error", "No matching rooms found");
                 }
                 if(!(roomStatusMap.get(room?.status!) == "InProgress") ){
-                    socket.emit("room-connect-error", "Action not permitted");
+                    socket.emit("room_connect_error", "Action not permitted");
                 }
 
-                let userData:TokenData = JSON.parse(atob(userInfo.token));
-                socket.to(userInfo.room_id).emit("round-response", {userData})
+                let userData:TokenData = JSON.parse(atob(userInfo.data));
+                socket.to(userInfo.room_id).emit("round_response", {userData})
             });
-            socket.on('stop-voting', async (userInfo: UserInfo)=>{
+            socket.on('stop_voting', async (userInfo: UserInfo)=>{
                 /**
                  * TODO:
                  * This is where the secret sauce will be added. For now though:
@@ -252,10 +262,10 @@ export class SocketController{
 
                 let room = await Room.findById(userInfo.room_id);
                 if(!room){
-                    socket.emit("room-connect-error", "No matching rooms found");
+                    socket.emit("room_connect_error", "No matching rooms found");
                 }
                 if(!(roomStatusMap.get(room?.status!) == "InProgress") ){
-                    socket.emit("room-connect-error", "Action not permitted");
+                    socket.emit("room_connect_error", "Action not permitted");
                 }
                 // The total amount of rounds for the room has ended.
                 ///emit the game over event if the current round reaches the limit set on the room.
@@ -269,7 +279,7 @@ export class SocketController{
 
                 let connectedSockets = await socket.nsp.in(userInfo.room_id).fetchSockets();
 
-                SocketController.chooseDictatorAndEmitEvent(connectedSockets, "choose-letter");
+                SocketController.chooseDictatorAndEmitEvent(connectedSockets, "choose_letter");
             });
             
 
@@ -292,7 +302,7 @@ export class SocketController{
     }
 
     static chooseDictatorAndEmitEvent(connectedSockets:RemoteSocket<DefaultEventsMap, any>[], event:string){
-        let index = connectedSockets.findIndex((socket)=> socket.data.isDictator);
+        let index = connectedSockets.findIndex((socket)=> socket.data.isDictator == true);
         // if no dictator is found or the last dictator is the last socket in the list then make the first socket be the dictator.
         if(index == -1 || index === connectedSockets.length-1){
             (connectedSockets[0].data as SocketData).user.isDictator = true;
@@ -300,8 +310,8 @@ export class SocketController{
             (connectedSockets[index + 1].data as SocketData).user.isDictator = true;
         }
 
-        let dictator = connectedSockets.find((socket)=> socket.data.isDictator)!;
-        dictator?.emit(event)
+        let dictator = connectedSockets.find((socket)=> socket.data.user.isDictator)!;
+        dictator?.emit(event);
 
         
     }
@@ -327,13 +337,14 @@ type SocketData ={
 
 }
 type UserInfo = {
-    token: string,
+    data: string,
     room_id: string
 }
 
 type TokenData = {
     email:string, 
     username:string, 
+    isDictator: number,
     id: string, 
     selected_letter: string, 
     timeout:number,

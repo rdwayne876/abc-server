@@ -16,15 +16,20 @@ export interface IUserModel extends IUser, mongoose.Document {
 	validPassword(password: string, cb: any): string;
 	gravatar(_size: number): string;
 }
-
+let statusKeys:number[] = [];
+for(let key of userStatusMap.keys()){
+	statusKeys.push(key);
+};
 // Define the User Schema
 export const UserSchema = new mongoose.Schema<IUserModel>({
 	email: { type: String, unique: true },
+	firstName: { type: String, required:true},
+	lastName: { type: String, required:true },
 	password: { type: String },
 	passwordResetToken: { type: String },
 	passwordResetExpires: Date,	
     username: { type: String },
-	status: { type: Number, enum: Object.keys(userStatusMap), default: 0 },
+	status: { type: Number, enum: {values: statusKeys, message: `{VALUE} is not in ${statusKeys}`}, default: 0 },
 	points: { type: Number, default:0 }
 }, {
 	timestamps: true

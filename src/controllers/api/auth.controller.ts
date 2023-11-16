@@ -42,7 +42,6 @@ class AuthController {
 
                 const _email = req.body.email.toLowerCase();
                 const _password = req.body.password;
-
                 let user = await User.findOne({email: _email});
                 if (!user) {
                     return JsonResponse.error(res, "No matching records found", ["User does not exist in database"], HttpStatusCode.NOT_FOUND)
@@ -87,6 +86,8 @@ class AuthController {
             // need to find a better place to put this
             // this.registerValidations.push(body('confirmPassword', 'Password & Confirmation password does not match').equals(req.body.password));
             let registerValidations:ValidationChain[] = [
+                body('firstName', 'Firstname cannot be blank').notEmpty(),
+                body('lastName', 'Lastname cannot be blank').notEmpty(),
                 body('email', 'E-mail cannot be blank').notEmpty(),
                 body('email', 'E-mail is not valid').isEmail(),
                 body('username', 'Username cannot be blank').notEmpty(),
@@ -104,12 +105,7 @@ class AuthController {
 		}
 
 		const _email = req.body.email.toLowerCase();
-		const _password = req.body.password;
-
-		const newUser = new User({
-			email: _email,
-			password: _password
-		});
+		const newUser = new User({...(req.body), email:_email});
         try{
             let existingUser = await User.findOne({ email: _email });
             if(existingUser){
@@ -120,6 +116,7 @@ class AuthController {
             }
 
         }catch(err:any){
+            console.log(err.stack)
             return JsonResponse.error(res, "Something happenned, try again", [err],HttpStatusCode.INTERNAL_SERVER_ERROR)
 
         }

@@ -1,6 +1,11 @@
 import { Document, Schema, Types, model } from "mongoose";
 import { IRoom,roomPrivacyMap,roomStatusMap } from "../interfaces/room";
 
+let statuskeys: number[] = [];
+let privacyKeys: number[] = [];
+
+for(let key of roomStatusMap.keys()){statuskeys.push(key)}
+for(let key of roomPrivacyMap.keys()){privacyKeys.push(key)}
 const roomSchema = new Schema<IRoom>({
     room_id: {type: String},
     name: {type: String},
@@ -10,8 +15,8 @@ const roomSchema = new Schema<IRoom>({
     round_duration:{type: Number, default: 30},
     round_limit: {type:Number, default:10},
     gameFields: {type: [String], default: ["Girl Name", "Boy Name", "Animal", "Place", "Thing"]},
-    status: {type: Number, enum: Object.keys(roomStatusMap), default:0},
-    privacy: {type:Number, enum: Object.keys(roomPrivacyMap), default: 0},
+    status: {type: Number, enum: {values: statuskeys, message: `{VALUE} is not in ${statuskeys}`}, default:0},
+    privacy: {type:Number, enum: {values: privacyKeys, message: `{VALUE} is not in ${privacyKeys}`}, default: 0},
 });
 
 

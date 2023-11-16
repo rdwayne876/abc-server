@@ -14,6 +14,8 @@ export interface IUser {
     [x: string]: any;
 	email: string;
 	password: string;
+	firstName:string;
+	lastName:string;
 	passwordResetToken: string;
 	passwordResetExpires: Date;
 

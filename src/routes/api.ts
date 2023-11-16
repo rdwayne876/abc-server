@@ -24,8 +24,10 @@ const router = Router();
 router.post('/auth/login', AuthController.ValidateAndLogin());
 router.post('/auth/register', AuthController.ValidateAndRegister());
 // router.post('/auth/refresh-token', expressJwt({ secret: Locals.config().appSecret }), RefreshTokenController.perform);
-
 router.get('/users', UserController.getAllUsers);
+router.patch('/users/:id',isAuthorized,...UserController.updateUserValidator, UserController.updateUserData);
+
+router.get('/userprofile',isAuthorized ,UserController.getUserProfile);
 router.get('/rooms', RoomController.getAllRooms);
 router.post('/rooms',isAuthorized, ...RoomController.createRoomValidators,RoomController.createRoom);
 router.get('/rooms/:id',isAuthorized,RoomController.getRoomById);
