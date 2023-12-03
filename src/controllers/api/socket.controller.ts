@@ -12,6 +12,7 @@ export class SocketController{
     static Namespaces = {};
     static TimeoutMap = new Map();
     static roomDataMap = new Map();
+    static roomResponseMap = new Map();
     static init(io:Server){
         
         io.on("connection", (socket)=>{
@@ -151,7 +152,6 @@ export class SocketController{
             });
 
             socket.on('letter_selected', async (userInfo:UserInfo)=>{
-                console.log(userInfo);
                 try {
                     let room = await Room.findById(userInfo.room_id);
                     if(!room){
@@ -204,8 +204,7 @@ export class SocketController{
 
                 // emit to everyone in the room that they should stop after timeout
                 let round_timeout = setTimeout(()=>{
-                    console.log("stop round")
-                    socket.nsp.to(userInfo.room_id).emit("stop_round", {main_message: "Time is up", side_messages:[]});
+                    socket.emit("stop_round", {main_message: "Time is up", side_messages:[]});
                 }, userdata.timeout * 1000);
 
                 // persist the timeout id to clear timeout if the user wishes to end round before the timeout completes.
@@ -219,6 +218,7 @@ export class SocketController{
                  * If the client that selects this option is the person assigned as Dictator.
                  * This will broadcast a stop_round event which overides previous round_duration. 
                  */
+                console.log("In Stop Round")
 
                 let room = await Room.findById(userInfo.room_id);
                 if(!room){
@@ -239,9 +239,42 @@ export class SocketController{
                 if(SocketController.TimeoutMap.has(userInfo.room_id)){
                     clearTimeout(SocketController.TimeoutMap.get(userInfo.room_id));
                     SocketController.TimeoutMap.delete(userInfo.room_id);
-
+                    return
                 }
                 socket.nsp.to(userInfo.room_id).emit("stop_round", {main_message: "Dictator has chosen to end the round.", side_messages:[]});
+            });
+
+            socket.on('round_response', async (userInfo:UserInfo)=>{
+                /**
+                 * TODO:
+                 * This listener will accept the user/responses and fields as key value pair.
+                 * The listener will then send all the users responses to the other sockets.
+                 */
+
+                let room = await Room.findById(userInfo.room_id);
+                if(!room){
+                    socket.emit("room_connect_error", "No matching rooms found");
+                }
+                if(!(roomStatusMap.get(room?.status!) == "InProgress") ){
+                    socket.emit("room_connect_error", "Action not permitted");
+                }
+                let connectedSockets = await socket.nsp.in(userInfo.room_id).fetchSockets();
+
+                // Emit waiting event while waiting on all responses from connected clients
+                if(!this.roomResponseMap.has(room?.id)){
+                    this.roomResponseMap.set(room?.id,[] );
+                };
+                
+                let socketResponses = JSON.parse(atob(userInfo.data));
+                let roundResponses = this.roomResponseMap.get(room?.id);
+                roundResponses.push(socketResponses);
+                console.log(roundResponses.length, connectedSockets.length)
+                if(roundResponses.length != connectedSockets.length){
+                    socket.nsp.to(userInfo.room_id).emit("waiting", {main_message: "waiting for responses"});
+                }else{
+                    socket.nsp.to(userInfo.room_id).emit("round_responses", {responses: this.roomResponseMap.get(room?.id)})
+                    this.roomResponseMap.set(room?.id,[] );
+                }
             });
             socket.on('start_voting', async (userInfo:UserInfo)=>{
                 /**
