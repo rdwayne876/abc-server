@@ -4,6 +4,7 @@ import { roomStatusMap } from '../../interfaces/room';
 import { ObjectId } from 'mongoose';
 import { getKeyByValue } from '../../helpers/Utility.helper';
 import { DefaultEventsMap } from 'socket.io/dist/typed-events';
+import User from '../../schema/user';
 
 
 
@@ -251,7 +252,9 @@ export class SocketController{
                  * The listener will then send all the users responses to the other sockets.
                  */
 
-                let room = await Room.findById(userInfo.room_id);
+                try{
+
+                    let room = await Room.findById(userInfo.room_id);
                 if(!room){
                     socket.emit("room_connect_error", "No matching rooms found");
                 }
@@ -264,10 +267,17 @@ export class SocketController{
                 if(!this.roomResponseMap.has(room?.id)){
                     this.roomResponseMap.set(room?.id,[] );
                 };
-                
-                let socketResponses = JSON.parse(atob(userInfo.data));
+                console.log("Called in stop round")
+                let socketResponse = JSON.parse(atob(userInfo.data));
                 let roundResponses = this.roomResponseMap.get(room?.id);
-                roundResponses.push(socketResponses);
+                let user = await User.findById(socketResponse["player"]);
+                if(user){
+                    socketResponse["player"] = user.username;
+                }else{
+                    console.log("Incorrect user")
+                    return socket.emit("room_connect_error", "No matching user found"); 
+                }
+                roundResponses.push(socketResponse);
                 console.log(roundResponses.length, connectedSockets.length)
                 if(roundResponses.length != connectedSockets.length){
                     socket.nsp.to(userInfo.room_id).emit("waiting", {main_message: "waiting for responses"});
@@ -275,6 +285,12 @@ export class SocketController{
                     socket.nsp.to(userInfo.room_id).emit("round_responses", {responses: this.roomResponseMap.get(room?.id)})
                     this.roomResponseMap.set(room?.id,[] );
                 }
+                }catch(error){
+                    console.log(error);
+                    socket.emit("room_connect_error", "Something Occured with the server");
+
+                }
+                
             });
             socket.on('start_voting', async (userInfo:UserInfo)=>{
                 /**
