@@ -14,6 +14,7 @@ export class SocketController{
     static TimeoutMap = new Map();
     static roomDataMap = new Map();
     static roomResponseMap = new Map();
+    static roomVoteMap = new Map();
     static init(io:Server){
         
         io.on("connection", (socket)=>{
@@ -267,7 +268,6 @@ export class SocketController{
                 if(!this.roomResponseMap.has(room?.id)){
                     this.roomResponseMap.set(room?.id,[] );
                 };
-                console.log("Called in stop round")
                 let socketResponse = JSON.parse(atob(userInfo.data));
                 let roundResponses = this.roomResponseMap.get(room?.id);
                 let user = await User.findById(socketResponse["player"]);
@@ -291,6 +291,54 @@ export class SocketController{
 
                 }
                 
+            });
+
+            socket.on('submit_vote', async (userInfo:UserInfo)=>{
+                /**
+                 * TODO:
+                 * This listener will accept the user/responses and fields as key value pair.
+                 * The listener will then send all the users responses to the other sockets.
+                 */
+                try{
+
+                    let room = await Room.findById(userInfo.room_id);
+                    if(!room){
+                        socket.emit("room_connect_error", "No matching rooms found");
+                    }
+                    if(!(roomStatusMap.get(room?.status!) == "InProgress") ){
+                        socket.emit("room_connect_error", "Action not permitted");
+                    }
+                    let connectedSockets = await socket.nsp.in(userInfo.room_id).fetchSockets();
+
+                    // Emit waiting event while waiting on all responses from connected clients
+                    if(!this.roomVoteMap.has(room?.id)){
+                        this.roomVoteMap.set(room?.id,[] );
+                    };
+                    let userData:UserVote = JSON.parse(atob(userInfo.data));
+                    let roomVotes = this.roomVoteMap.get(room?.id);
+                    let user = await User.findById(userData.socket_user);
+                    if(!user){
+                        return socket.emit("room_connect_error", "User is not allowed to be in this room")
+                    }
+
+                    roomVotes.push(userData);
+                    /**
+                     * Get all votes
+                     */
+                    if(roomVotes.length != connectedSockets.length){
+                        socket.nsp.to(userInfo.room_id).emit("waiting", {main_message: "waiting for responses"});
+                    }else{
+                        // socket.nsp.to(userInfo.room_id).emit("round_responses", {responses: this.roomResponseMap.get(room?.id)})
+                        console.log(roomVotes);
+                        this.roomResponseMap.set(room?.id,[] );
+                    }
+
+    
+                    socket.to(userInfo.room_id).emit("round_response", {userData})
+                }catch(error){
+                    console.log(error);
+                    socket.emit("room_connect_error","Something occured on the server")
+                }
             });
             socket.on('start_voting', async (userInfo:UserInfo)=>{
                 /**
@@ -402,6 +450,16 @@ type SocketData ={
 type UserInfo = {
     data: string,
     room_id: string
+}
+
+type UserVote = {
+    socket_user: string,
+    vote:{
+        player: string, 
+        response: {
+            [key:string]:{value:string, isCorrect:boolean}
+        }
+    }[]
 }
 
 type TokenData = {
