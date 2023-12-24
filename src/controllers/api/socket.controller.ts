@@ -125,9 +125,9 @@ export class SocketController{
                 if(!room){
                     socket.emit("room_connect_error", "No matching rooms found");
                 }
-                if(!(roomStatusMap.get(room?.status!) == "Online") ){
-                    socket.emit("room_connect_error", "Room is currently unavailable");
-                }
+                // if(!(roomStatusMap.get(room?.status!) == "Online") ){
+                //     socket.emit("room_connect_error", "Room is currently unavailable");
+                // }
                 let userdata:{email:string, username:string, id: string, selected_letter: string, timeout:number} = JSON.parse(atob(userInfo.data));
 
                 let connectedSockets = await socket.nsp.in(userInfo.room_id).fetchSockets();
@@ -278,7 +278,7 @@ export class SocketController{
                     return socket.emit("room_connect_error", "No matching user found"); 
                 }
                 roundResponses.push(socketResponse);
-                console.log(roundResponses.length, connectedSockets.length)
+                console.log("Responses: ",roundResponses.length );
                 if(roundResponses.length != connectedSockets.length){
                     socket.nsp.to(userInfo.room_id).emit("waiting", {main_message: "waiting for responses"});
                 }else{
@@ -315,26 +315,48 @@ export class SocketController{
                         this.roomVoteMap.set(room?.id,[] );
                     };
                     let userData:UserVote = JSON.parse(atob(userInfo.data));
-                    let roomVotes = this.roomVoteMap.get(room?.id);
-                    let user = await User.findById(userData.socket_user);
+                    let roomVotes:UserVote[] = this.roomVoteMap.get(room?.id);
+                    let user = await User.findById(userData.socket_user_id);
                     if(!user){
                         return socket.emit("room_connect_error", "User is not allowed to be in this room")
                     }
-
+                    userData.socket_user = user.username;
                     roomVotes.push(userData);
                     /**
                      * Get all votes
                      */
+                    let users_tally = [];
+                    console.log("Room Votes", roomVotes.length)                    
                     if(roomVotes.length != connectedSockets.length){
                         socket.nsp.to(userInfo.room_id).emit("waiting", {main_message: "waiting for responses"});
                     }else{
-                        // socket.nsp.to(userInfo.room_id).emit("round_responses", {responses: this.roomResponseMap.get(room?.id)})
-                        console.log(roomVotes);
-                        this.roomResponseMap.set(room?.id,[] );
-                    }
+                        console.log("hey")
+                        for(let user of roomVotes){
+                            let userObj:{player:string, sum: number};
+                            userObj = {player: user.socket_user, sum:0};
 
+                            // compare all votes to get total votes by pointer user for the user at this iteration.
+                            for(let pointeruser of roomVotes){
+                                //find the votes for the socket user
+                                let vote = pointeruser.vote.find((vote)=>{
+                                    return vote.player == userObj.player;
+                                });
+                                if(vote){
+                                    let tally = Object.values(vote.response).reduce((accum,current)=>{
+                                        return accum + (current.isCorrect ? 1 : 0);
+                                    }, 0);
+                                    userObj.sum+=tally;
+                                    console.log(tally);
+                                    users_tally.push(userObj);
+                                } 
+                            }
+                        // }
+                        console.log("Users Tally",users_tally);
+                    }
+                    this.roomResponseMap.set(room?.id,[] );
+                    }
     
-                    socket.to(userInfo.room_id).emit("round_response", {userData})
+                    socket.nsp.to(userInfo.room_id).emit("round_tally", {users_tally})
                 }catch(error){
                     console.log(error);
                     socket.emit("room_connect_error","Something occured on the server")
@@ -453,7 +475,9 @@ type UserInfo = {
 }
 
 type UserVote = {
+    socket_user_id: string,
     socket_user: string,
+
     vote:{
         player: string, 
         response: {
