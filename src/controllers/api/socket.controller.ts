@@ -189,7 +189,7 @@ export class SocketController{
 
                 let room = await Room.findById(userInfo.room_id);
                 if(!room){
-                    socket.emit("room_connect_error", "No matching rooms found");
+                    return socket.emit("room_connect_error", "No matching rooms found");
                 }
                 if(!(roomStatusMap.get(room?.status!) == "InProgress") ){
                     socket.emit("room_connect_error", "Action not permitted");
@@ -203,6 +203,8 @@ export class SocketController{
                     socket.emit("room_connect_error", "Client does not have permission to start round please wait until letter is selected")
                 };
                 userdata.timeout = room?.round_duration!;
+                this.roomResponseMap.set(room._id,[] );
+                this.roomVoteMap.set(room?.id,[] );
 
                 // emit to everyone in the room that they should stop after timeout
                 let round_timeout = setTimeout(()=>{
@@ -299,6 +301,7 @@ export class SocketController{
                  * This listener will accept the user/responses and fields as key value pair.
                  * The listener will then send all the users responses to the other sockets.
                  */
+                let room_id = "";
                 try{
 
                     let room = await Room.findById(userInfo.room_id);
@@ -325,40 +328,20 @@ export class SocketController{
                     /**
                      * Get all votes
                      */
-                    let users_tally = [];
-                    console.log("Room Votes", roomVotes.length)                    
+                    let  scoreTable = [];
+                    console.log("Room Votes Length", roomVotes.length)   
+                    console.log("Room Votes", roomVotes)
+                 
                     if(roomVotes.length != connectedSockets.length){
-                        socket.nsp.to(userInfo.room_id).emit("waiting", {main_message: "waiting for responses"});
+                        return socket.emit("waiting", {main_message: "waiting for responses"});
                     }else{
-                        console.log("hey")
-                        for(let user of roomVotes){
-                            let userObj:{player:string, sum: number};
-                            userObj = {player: user.socket_user, sum:0};
-
-                            // compare all votes to get total votes by pointer user for the user at this iteration.
-                            for(let pointeruser of roomVotes){
-                                //find the votes for the socket user
-                                let vote = pointeruser.vote.find((vote)=>{
-                                    return vote.player == userObj.player;
-                                });
-                                if(vote){
-                                    let tally = Object.values(vote.response).reduce((accum,current)=>{
-                                        return accum + (current.isCorrect ? 1 : 0);
-                                    }, 0);
-                                    userObj.sum+=tally;
-                                    console.log(tally);
-                                    users_tally.push(userObj);
-                                } 
-                            }
-                        // }
-                        console.log("Users Tally",users_tally);
-                    }
-                    this.roomResponseMap.set(room?.id,[] );
-                    }
-    
-                    socket.nsp.to(userInfo.room_id).emit("round_tally", {users_tally})
+                        scoreTable = calculateVotes(roomVotes);           
+                        this.roomResponseMap.set(room?.id,[] );
+                        socket.nsp.to(userInfo.room_id).emit("round_tally", {response: scoreTable});
+                    }    
                 }catch(error){
                     console.log(error);
+                    this.roomResponseMap.set(room_id,[] );
                     socket.emit("room_connect_error","Something occured on the server")
                 }
             });
@@ -494,4 +477,43 @@ type TokenData = {
     selected_letter: string, 
     timeout:number,
     responses: {[x:string]: any}[]
+}
+
+function calculateVotes(votes: UserVote[]):{player:string , response: {[key:string]:{ value: string; votes: number; }}}[]{
+    let users_tally = [];
+    for(let user of votes){
+        let userObj:{player:string, response: {[key:string]: {value: string, votes: number}}};
+        userObj = {player: user.socket_user, response:{}};
+
+        // compare all votes to get total votes by pointer user for the user at this iteration.
+        for(let pointeruser of votes){
+            //find the votes for the socket user
+                for(let user_response of pointeruser.vote){                    
+                    if(userObj.player == user_response.player){
+                        let objectSum = sumObjectProperties(userObj.response, user_response.response);
+                        userObj.response = objectSum;
+                        break;
+                }
+                
+                // userObj.sum+=tally;
+            } 
+        }
+        users_tally.push(userObj);
+    }
+    return users_tally;
+
+}
+
+function sumObjectProperties(originalObject: {[key:string]:{value:string, votes:number}}, objectWithUpdates: {[key:string]:{value:string, isCorrect:boolean}}): {[key:string]:{value:string, votes:number}}{
+    if(Object.keys(originalObject).length == 0){
+        Object.entries(objectWithUpdates).forEach(([prop, valueObj])=>{
+            originalObject[prop] = {value: valueObj.value, votes: Number(objectWithUpdates[prop].isCorrect)}
+        })  
+    }else{
+        for(let prop in originalObject){
+            originalObject[prop].votes += Number(objectWithUpdates[prop].isCorrect); // converts true false to 1 or 0 respectively
+        }
+    }
+
+    return originalObject;
 }
