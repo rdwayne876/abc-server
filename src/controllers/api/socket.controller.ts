@@ -207,13 +207,13 @@ export class SocketController{
                 this.roomVoteMap.set(room?.id,[] );
 
                 // emit to everyone in the room that they should stop after timeout
-                let round_timeout = setTimeout(()=>{
-                    socket.emit("stop_round", {main_message: "Time is up", side_messages:[]});
-                }, userdata.timeout * 1000);
+                // let round_timeout = setTimeout(()=>{
+                //     socket.emit("stop_round", {main_message: "Time is up", side_messages:[]});
+                // }, userdata.timeout * 1000);
+                // emit to everyone in the room that they should stop after timeout'
 
-                // persist the timeout id to clear timeout if the user wishes to end round before the timeout completes.
-                SocketController.TimeoutMap.set(userInfo.room_id, round_timeout);
-
+                console.log(room.round_duration);
+                timeoutManager(socket, room.id, room.round_duration, 1000, {name: "stop_round", data:{main_message: "Time is up", side_messages:[]}});
             });
             socket.on('stop_round', async(userInfo:UserInfo)=>{
                 /**
@@ -237,15 +237,17 @@ export class SocketController{
                 let connectedSockets = await socket.nsp.in(userInfo.room_id).fetchSockets();
                 let isDictator = connectedSockets.find((socket)=> (socket.data as SocketData).user.isDictator && (socket.data as SocketData).user.id === userdata.id);
                 if(!isDictator){
-                    socket.emit("room_connect_error", "Client does not have permission to start round please wait until letter is selected")
-                };
+                    socket.emit("room_connect_error", "Client does not have permission to stop round please wait until letter is selected")
+                }else{
                 // checks the timout map to see if there is a timeout for this room then clears the timeout
                 if(SocketController.TimeoutMap.has(userInfo.room_id)){
-                    clearTimeout(SocketController.TimeoutMap.get(userInfo.room_id));
+                    clearTimeout(SocketController.TimeoutMap.get(userInfo.room_id).id);
                     SocketController.TimeoutMap.delete(userInfo.room_id);
-                    return
+                    return socket.nsp.to(userInfo.room_id).emit("stop_round", {main_message: "Dictator has chosen to end the round.", side_messages:[]});
+
                 }
-                socket.nsp.to(userInfo.room_id).emit("stop_round", {main_message: "Dictator has chosen to end the round.", side_messages:[]});
+                }
+
             });
 
             socket.on('round_response', async (userInfo:UserInfo)=>{
@@ -281,11 +283,15 @@ export class SocketController{
                 }
                 roundResponses.push(socketResponse);
                 console.log("Responses: ",roundResponses.length );
+                timeoutManager(socket, room?.id, room?.voting_duration!, 1000, {name:"time_up", data:{next_event:"submit_vote", message: {main_message: "Voting time is up. ", side_messages:[]}}});
                 if(roundResponses.length != connectedSockets.length){
                     socket.nsp.to(userInfo.room_id).emit("waiting", {main_message: "waiting for responses"});
                 }else{
+                    // If all responses are made then we can proceed even before the time has expired.
                     socket.nsp.to(userInfo.room_id).emit("round_responses", {responses: this.roomResponseMap.get(room?.id)})
                     this.roomResponseMap.set(room?.id,[] );
+                    // clearInterval(SocketController.TimeoutMap.get(room?.id).id);
+                    
                 }
                 }catch(error){
                     console.log(error);
@@ -516,4 +522,28 @@ function sumObjectProperties(originalObject: {[key:string]:{value:string, votes:
     }
 
     return originalObject;
+}
+
+function timeoutManager(socket:Socket, room_id: string, duration: number, interval:number, callback:{name:string, data: object}){
+    if(!SocketController.TimeoutMap.has(room_id)){
+        let round_timeout = setInterval(()=>{
+            if(SocketController.TimeoutMap.has(room_id) && (SocketController.TimeoutMap.get(room_id).timeLeft >= 0)){
+                let countdownVal = SocketController.TimeoutMap.get(room_id).timeLeft;
+                console.log(countdownVal);
+                socket.nsp.emit("timer", {time_remaining:countdownVal});
+                SocketController.TimeoutMap.set(room_id, {id: round_timeout, timeLeft: --countdownVal});
+            }else{
+                clearTimeout(round_timeout);
+                SocketController.TimeoutMap.delete(room_id);
+                return socket.nsp.emit(callback.name, callback.data)
+                // return cb;
+            }
+
+        }, interval);
+         // persist the timeout id to clear timeout if the user wishes to end round before the timeout completes.
+        SocketController.TimeoutMap.set(room_id, {id: round_timeout, timeLeft: duration});
+    }else{
+        // Since we are working with a set interval. I can just not do anything if a timeout is already created in the room.
+        return;
+    }
 }
