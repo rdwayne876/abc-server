@@ -341,7 +341,11 @@ export class SocketController{
                     if(roomVotes.length != connectedSockets.length){
                         return socket.emit("waiting", {main_message: "waiting for responses"});
                     }else{
-                        scoreTable = calculateVotes(roomVotes);           
+                        scoreTable = calculateVotes(roomVotes);
+                        if(SocketController.TimeoutMap.has(userInfo.room_id)){
+                            clearTimeout(SocketController.TimeoutMap.get(userInfo.room_id).id);
+                            SocketController.TimeoutMap.delete(userInfo.room_id);        
+                        }    
                         this.roomResponseMap.set(room?.id,[] );
                         socket.nsp.to(userInfo.room_id).emit("round_tally", {response: scoreTable});
                     }    
