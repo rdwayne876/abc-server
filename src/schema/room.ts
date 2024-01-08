@@ -22,4 +22,9 @@ const roomSchema = new Schema<IRoom>({
 
 export interface IRoomModel extends IRoom, Document{};
 
-export const Room = model("Room", roomSchema)
+export const Room = model("Room", roomSchema);
+export enum StatusEnum {
+    ONLINE = 0,
+    INPROGRESS = 1,
+    OFFLINE = 2,
+}

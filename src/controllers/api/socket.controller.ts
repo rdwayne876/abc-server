@@ -1,10 +1,10 @@
 import { RemoteSocket, Server, Socket } from 'socket.io';
-import { Room } from '../../schema/room';
+import { Room, StatusEnum } from '../../schema/room';
 import { roomStatusMap } from '../../interfaces/room';
 import { ObjectId } from 'mongoose';
 import { getKeyByValue } from '../../helpers/Utility.helper';
 import { DefaultEventsMap } from 'socket.io/dist/typed-events';
-import User from '../../schema/user';
+import User, { UserSchema } from '../../schema/user';
 
 
 
@@ -30,6 +30,7 @@ export class SocketController{
         //     next(new Error("I won't let anything pass"));
         // })
         io.of('/gameroom').on('connection', async(socket)=>{
+
             socket.on('join_room', async(userInfo: UserInfo)=>{
                 try{
                    
@@ -53,22 +54,27 @@ export class SocketController{
                      * Get all the users/sockets currently connected to the room via room id.
                      * Broadcast to all the users the total number of users until game begins.
                     */
-                    let room = await Room.findById((userInfo.room_id));
-                    if(!room){
-                        socket.emit("room_connect_error", "No rooom matches this room id");
-                    }
-                    let roomStatusStr = roomStatusMap.get(0);
-                    if(!(roomStatusStr === "Online")){
-                        socket.emit("room_connect_error", "Room is currently unavailable");
-                    }
-
                     //Create user Object.
                     //Token will contain userData like {email, id, username}
                     let userdata:TokenData = JSON.parse(atob(userInfo.data));
-                    //
+
+                    let user = await User.findById(userdata.id);
+                    if(!user) return socket.emit("room_connect_error", "No matching record found for this user")
+
+                    let room = await Room.findById(userInfo.room_id);
+                    if(!room){
+                        socket.emit("room_connect_error", "No rooom matches this room id");
+                    }
+                    if((room?.status != StatusEnum.ONLINE) && room?.creator != user.id){
+                        return socket.emit("room_connect_error", "Room is currently unavailable");
+                    }
+                    room?.updateOne({status: StatusEnum.ONLINE}).exec();
+                    // Joins a room using the room id as a iterator.
+                    socket.join(room?.id);
 
                     // io.socketsJoin(userInfo.room_id);
-                    let connectedSockets = await socket.nsp.in(userInfo.room_id).fetchSockets();
+                    // let connectedSockets = await socket.nsp.in(userInfo.room_id).fetchSockets();
+                    let connectedSockets = await io.in(userInfo.room_id).fetchSockets();
 
                     if(room?.player_limit == connectedSockets.length){
                         // Room full but socket is the creater. I will kick out a random nobody..lol
@@ -124,6 +130,8 @@ export class SocketController{
                 let room = await Room.findById(userInfo.room_id);
                 if(!room){
                     socket.emit("room_connect_error", "No matching rooms found");
+                }else if(room.status == StatusEnum.INPROGRESS){
+                    socket.emit("Game is already in session");
                 }
                 // if(!(roomStatusMap.get(room?.status!) == "Online") ){
                 //     socket.emit("room_connect_error", "Room is currently unavailable");
@@ -139,13 +147,13 @@ export class SocketController{
                 }
                 // Change room status to inProgress
 
-                room?.updateOne({status: getKeyByValue(roomStatusMap,"InProgress")});
+                room?.updateOne({status: StatusEnum.INPROGRESS}).exec();
                 // choose dictator and emit choose_letter event.
 
                 SocketController.chooseDictator(connectedSockets);
                 if(socket.data.user.isDictator){
                     socket.emit("choose_letter");
-                    socket.broadcast.emit("waiting", {main_message: "Waiting on the Dictator to choose a letter.", side_messages:[]})
+                    socket.nsp.to(userInfo.room_id).emit("waiting", {main_message: "Waiting on the Dictator to choose a letter.", side_messages:[]})
 
                 }
 
@@ -159,7 +167,7 @@ export class SocketController{
                     if(!room){
                         socket.emit("room_connect_error", "No matching rooms found");
                     }
-                    if(!(roomStatusMap.get(room?.status!) == "InProgress") ){
+                    if(!(room?.status == StatusEnum.INPROGRESS) ){
                         socket.emit("room_connect_error", "Action not permitted");
                     }
     
@@ -175,7 +183,6 @@ export class SocketController{
                 } catch (error) {
                     console.log(error);
                     socket.emit("room_connect_error", "Something Occured with the server");
-
                 }
             })
 
@@ -191,7 +198,7 @@ export class SocketController{
                 if(!room){
                     return socket.emit("room_connect_error", "No matching rooms found");
                 }
-                if(!(roomStatusMap.get(room?.status!) == "InProgress") ){
+                if(!(room?.status == StatusEnum.INPROGRESS) ){
                     socket.emit("room_connect_error", "Action not permitted");
                 }
 
@@ -228,7 +235,7 @@ export class SocketController{
                 if(!room){
                     socket.emit("room_connect_error", "No matching rooms found");
                 }
-                if(!(roomStatusMap.get(room?.status!) == "InProgress") ){
+                if(!(room?.status == StatusEnum.INPROGRESS) ){
                     socket.emit("room_connect_error", "Action not permitted");
                 }
 
@@ -263,7 +270,7 @@ export class SocketController{
                 if(!room){
                     socket.emit("room_connect_error", "No matching rooms found");
                 }
-                if(!(roomStatusMap.get(room?.status!) == "InProgress") ){
+                if(!(room?.status == StatusEnum.INPROGRESS) ){
                     socket.emit("room_connect_error", "Action not permitted");
                 }
                 let connectedSockets = await socket.nsp.in(userInfo.room_id).fetchSockets();
@@ -314,7 +321,7 @@ export class SocketController{
                     if(!room){
                         socket.emit("room_connect_error", "No matching rooms found");
                     }
-                    if(!(roomStatusMap.get(room?.status!) == "InProgress") ){
+                    if(!(room?.status == StatusEnum.INPROGRESS) ){
                         socket.emit("room_connect_error", "Action not permitted");
                     }
                     let connectedSockets = await socket.nsp.in(userInfo.room_id).fetchSockets();
@@ -348,6 +355,23 @@ export class SocketController{
                         }    
                         this.roomResponseMap.set(room?.id,[] );
                         socket.nsp.to(userInfo.room_id).emit("round_tally", {response: scoreTable});
+                        // timeoutManager(socket, userInfo.room_id, 10, 1000, );
+                         // The total amount of rounds for the room has ended.
+                        if(room?.round_limit! <= (socket.data as SocketData).user.current_round){
+                            // Calculate the winner from the room then save the points to the user in the database. There can only be one user or none.
+                            // If there is no highest score then noone will win no updates will be made to the respective users record.
+                            return timeoutManager(socket, userInfo.room_id, 15, 1000, {name :"Gameover", data:{}})
+                        }
+
+                        let connectedSockets = await socket.nsp.in(userInfo.room_id).fetchSockets();
+
+                        SocketController.chooseDictator(connectedSockets);
+                        console.log(socket.data.user);
+                        if(socket.data.user.isDictator){
+                            return timeoutManager(socket, userInfo.room_id, 15, 1000, {name: "choose_letter", data:{}});
+                        }else{
+                            return timeoutManager(socket, userInfo.room_id, 15, 1000, {name:"waiting", data: {main_message: "Waiting on the Dictator to choose a letter.", side_messages: []}});
+                        }
                     }    
                 }catch(error){
                     console.log(error);
@@ -366,7 +390,7 @@ export class SocketController{
                 if(!room){
                     socket.emit("room_connect_error", "No matching rooms found");
                 }
-                if(!(roomStatusMap.get(room?.status!) == "InProgress") ){
+                if(!(room?.status == StatusEnum.INPROGRESS) ){
                     socket.emit("room_connect_error", "Action not permitted");
                 }
 
@@ -389,7 +413,7 @@ export class SocketController{
                 if(!room){
                     socket.emit("room_connect_error", "No matching rooms found");
                 }
-                if(!(roomStatusMap.get(room?.status!) == "InProgress") ){
+                if(!(room?.status == StatusEnum.INPROGRESS) ){
                     socket.emit("room_connect_error", "Action not permitted");
                 }
                 // The total amount of rounds for the room has ended.
@@ -410,10 +434,7 @@ export class SocketController{
                 }else{
                     socket.emit("waiting", {main_message: "Waiting on the Dictator to choose a letter.", side_messages: []})
                 }
-            });
-            
-
-            
+            });                      
 
             
 
@@ -432,14 +453,16 @@ export class SocketController{
     }
 
     static chooseDictator(connectedSockets:RemoteSocket<DefaultEventsMap, any>[]){
-        let index = connectedSockets.findIndex((socket)=> socket.data.isDictator == true);
+        let index = connectedSockets.findIndex((socket)=> (socket.data as SocketData).user.isDictator == true);
         // if no dictator is found or the last dictator is the last socket in the list then make the first socket be the dictator.
-        if(index == -1 || index === connectedSockets.length-1){
+        let randIndex = Math.floor(Math.random() * connectedSockets.length);
+        if(index == -1 || index === connectedSockets.length-1 || (index+1 > connectedSockets.length-1)){
             (connectedSockets[0].data as SocketData).user.isDictator = true;
         }else{
-            (connectedSockets[index + 1].data as SocketData).user.isDictator = true;
+            clearDictatorStatus(connectedSockets); // clears the status of the dictator if there was a dictator already selected.
+            console.log("Choosing a dictator");
+            (connectedSockets[index+1].data as SocketData).user.isDictator = true;
         }
-        console.log(connectedSockets[0].data)
     }
 
 }
@@ -455,7 +478,8 @@ type SocketData ={
         current_round: number
     },
     room:{
-        size:number
+        size:number,
+        id:string
     }
 
 
@@ -533,7 +557,6 @@ function timeoutManager(socket:Socket, room_id: string, duration: number, interv
         let round_timeout = setInterval(()=>{
             if(SocketController.TimeoutMap.has(room_id) && (SocketController.TimeoutMap.get(room_id).timeLeft >= 0)){
                 let countdownVal = SocketController.TimeoutMap.get(room_id).timeLeft;
-                console.log(countdownVal);
                 socket.nsp.emit("timer", {time_remaining:countdownVal});
                 SocketController.TimeoutMap.set(room_id, {id: round_timeout, timeLeft: --countdownVal});
             }else{
@@ -550,4 +573,12 @@ function timeoutManager(socket:Socket, room_id: string, duration: number, interv
         // Since we are working with a set interval. I can just not do anything if a timeout is already created in the room.
         return;
     }
+}
+
+function clearDictatorStatus(connectedSockets: RemoteSocket<DefaultEventsMap, any>[]) {
+    connectedSockets.forEach((socket)=>{
+        (socket.data as SocketData).user.isDictator = false;
+    })
+    console.log("First Socket",connectedSockets[0].data);
+    console.log("Last Socket", connectedSockets[1].data);
 }
