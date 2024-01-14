@@ -153,8 +153,7 @@ export class SocketController{
                 SocketController.chooseDictator(connectedSockets);
                 if(socket.data.user.isDictator){
                     socket.emit("choose_letter");
-                    socket.nsp.to(userInfo.room_id).emit("waiting", {main_message: "Waiting on the Dictator to choose a letter.", side_messages:[]})
-
+                    socket.broadcast.to(userInfo.room_id).emit("waiting", {main_message: "Waiting on the Dictator to choose a letter.", side_messages:[]})
                 }
 
                 
@@ -366,12 +365,8 @@ export class SocketController{
                         let connectedSockets = await socket.nsp.in(userInfo.room_id).fetchSockets();
 
                         SocketController.chooseDictator(connectedSockets);
-                        console.log(socket.data.user);
-                        if(socket.data.user.isDictator){
-                            return timeoutManager(socket, userInfo.room_id, 15, 1000, {name: "choose_letter", data:{}});
-                        }else{
-                            return timeoutManager(socket, userInfo.room_id, 15, 1000, {name:"waiting", data: {main_message: "Waiting on the Dictator to choose a letter.", side_messages: []}});
-                        }
+                        timeoutManagerNewRound(socket, userInfo.room_id, 15, 1000, connectedSockets);
+                        
                     }    
                 }catch(error){
                     console.log(error);
@@ -456,7 +451,10 @@ export class SocketController{
         let index = connectedSockets.findIndex((socket)=> (socket.data as SocketData).user.isDictator == true);
         // if no dictator is found or the last dictator is the last socket in the list then make the first socket be the dictator.
         let randIndex = Math.floor(Math.random() * connectedSockets.length);
-        if(index == -1 || index === connectedSockets.length-1 || (index+1 > connectedSockets.length-1)){
+        if(index == -1 || index === connectedSockets.length-1){
+            (connectedSockets[0].data as SocketData).user.isDictator = true;
+        }else if( (index+1 > connectedSockets.length-1)){
+            clearDictatorStatus(connectedSockets); // clears the status of the dictator if there was a dictator already selected.
             (connectedSockets[0].data as SocketData).user.isDictator = true;
         }else{
             clearDictatorStatus(connectedSockets); // clears the status of the dictator if there was a dictator already selected.
@@ -552,17 +550,55 @@ function sumObjectProperties(originalObject: {[key:string]:{value:string, votes:
     return originalObject;
 }
 
-function timeoutManager(socket:Socket, room_id: string, duration: number, interval:number, callback:{name:string, data: object}){
+function timeoutManager(socket:Socket, room_id: string, duration: number, interval:number, callback:{name:string, data: object}, toRoom = true){
     if(!SocketController.TimeoutMap.has(room_id)){
         let round_timeout = setInterval(()=>{
             if(SocketController.TimeoutMap.has(room_id) && (SocketController.TimeoutMap.get(room_id).timeLeft >= 0)){
                 let countdownVal = SocketController.TimeoutMap.get(room_id).timeLeft;
-                socket.nsp.emit("timer", {time_remaining:countdownVal});
+                socket.nsp.to(room_id).emit("timer", {time_remaining:countdownVal});
                 SocketController.TimeoutMap.set(room_id, {id: round_timeout, timeLeft: --countdownVal});
             }else{
                 clearTimeout(round_timeout);
                 SocketController.TimeoutMap.delete(room_id);
-                return socket.nsp.emit(callback.name, callback.data)
+                if(!toRoom){
+                    console.log(callback.name)
+                    return socket.emit(callback.name, callback.data);
+                }
+                return socket.nsp.to(room_id).emit(callback.name, callback.data)
+                // return cb;
+            }
+
+        }, interval);
+         // persist the timeout id to clear timeout if the user wishes to end round before the timeout completes.
+        SocketController.TimeoutMap.set(room_id, {id: round_timeout, timeLeft: duration});
+    }else{
+        // Since we are working with a set interval. I can just not do anything if a timeout is already created in the room.
+        return;
+    }
+}
+
+function timeoutManagerNewRound(socket:Socket, room_id: string, duration: number, interval:number, socketList:RemoteSocket<DefaultEventsMap, any>[]){
+    if(!SocketController.TimeoutMap.has(room_id)){
+        let round_timeout = setInterval(()=>{
+            if(SocketController.TimeoutMap.has(room_id) && (SocketController.TimeoutMap.get(room_id).timeLeft >= 0)){
+                let countdownVal = SocketController.TimeoutMap.get(room_id).timeLeft;
+                socket.nsp.to(room_id).emit("timer", {time_remaining:countdownVal});
+                SocketController.TimeoutMap.set(room_id, {id: round_timeout, timeLeft: --countdownVal});
+            }else{
+                clearTimeout(round_timeout);
+                SocketController.TimeoutMap.delete(room_id);
+
+                for(let i = 0; i < socketList.length; i++){
+                    if(socketList[i] instanceof Socket){
+                        socket = socketList[i] as unknown as Socket;
+                    }
+                    // let socket = connectedSockets[i] as Socket;
+                    if(socket.data.user.isDictator){
+                        socket.nsp.in(room_id).emit("waiting", {main_message: "Waiting on the Dictator to choose a letter.", side_messages:[]})
+                        socket.emit("choose_letter", {});
+                        return;
+                    }
+                }
                 // return cb;
             }
 
@@ -579,6 +615,4 @@ function clearDictatorStatus(connectedSockets: RemoteSocket<DefaultEventsMap, an
     connectedSockets.forEach((socket)=>{
         (socket.data as SocketData).user.isDictator = false;
     })
-    console.log("First Socket",connectedSockets[0].data);
-    console.log("Last Socket", connectedSockets[1].data);
 }
