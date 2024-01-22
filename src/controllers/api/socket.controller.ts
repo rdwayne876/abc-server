@@ -22,6 +22,7 @@ export class SocketController{
             console.log(socket.id);
             socket.emit("Connected");
         });
+
         
 
 
@@ -429,11 +430,33 @@ export class SocketController{
                 }else{
                     socket.emit("waiting", {main_message: "Waiting on the Dictator to choose a letter.", side_messages: []})
                 }
-            });                      
+            }); 
+            
+            socket.on("leave-room", async(userInfo:UserInfo)=>{
+                let userdata:TokenData = JSON.parse(atob(userInfo.data));
+
+                let user = await User.findById(userdata.id);
+                if(!user) return socket.emit("room_connect_error", "No matching record found for this user")
+
+                let room = await Room.findById(userInfo.room_id);
+                if(!room){
+                    socket.emit("room_connect_error", "No rooom matches this room id");
+                }
+                if((room?.status != StatusEnum.ONLINE) && room?.creator != user.id){
+                    return socket.emit("room_connect_error", "Room is currently unavailable");
+                }
+                
+                socket.leave(room?.id);
+                
+            });
 
             
 
         });
+
+        io.of("/gameroom").on("disconnect",()=>{
+            console.log("disconnected");
+        })
         SocketController.IO = io;
     }
 
