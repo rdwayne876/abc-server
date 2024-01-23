@@ -434,19 +434,19 @@ export class SocketController{
             
             socket.on("leave-room", async(userInfo:UserInfo)=>{
                 let userdata:TokenData = JSON.parse(atob(userInfo.data));
-
+                console.log("Hey I am here in leave room")
                 let user = await User.findById(userdata.id);
                 if(!user) return socket.emit("room_connect_error", "No matching record found for this user")
 
                 let room = await Room.findById(userInfo.room_id);
                 if(!room){
                     socket.emit("room_connect_error", "No rooom matches this room id");
-                }
-                if((room?.status != StatusEnum.ONLINE) && room?.creator != user.id){
-                    return socket.emit("room_connect_error", "Room is currently unavailable");
-                }
-                
+                }    
+                socket.nsp.to(room?.id).emit("room_notification",`${user.username.charAt(0).toLowerCase() + user.username.slice(1)} has left the room`)
+                socket.emit("leave-room");
                 socket.leave(room?.id);
+
+
                 
             });
 
@@ -639,3 +639,4 @@ function clearDictatorStatus(connectedSockets: RemoteSocket<DefaultEventsMap, an
         (socket.data as SocketData).user.isDictator = false;
     })
 }
+
