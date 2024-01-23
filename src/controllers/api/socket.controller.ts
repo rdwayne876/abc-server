@@ -442,7 +442,7 @@ export class SocketController{
                 if(!room){
                     socket.emit("room_connect_error", "No rooom matches this room id");
                 }    
-                socket.nsp.to(room?.id).emit("room_notification",`${user.username.charAt(0).toLowerCase() + user.username.slice(1)} has left the room`)
+                socket.nsp.to(room?.id).emit("room_notification",{innitiator: user.username, message:`${user.username.charAt(0).toLowerCase() + user.username.slice(1)} has left the room`});
                 socket.emit("leave-room");
                 socket.leave(room?.id);
 
