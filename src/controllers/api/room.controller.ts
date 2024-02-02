@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { JsonResponse } from '../../helpers/JsonResponse.helper';
 import HttpStatusCode from '../../helpers/StatusCodes.helper';
-import { IRoomModel, Room } from '../../schema/room';
+import { IRoomModel, Room, StatusEnum } from '../../schema/room';
 import { isObjectIdOrHexString } from 'mongoose';
 import { body, validationResult } from 'express-validator';
 import { IRoom, roomPrivacyMap, roomStatusMap } from '../../interfaces/room';
@@ -72,6 +72,18 @@ export class RoomController{
         }catch(e:any){
             return JsonResponse.error(res, "Unable to retrieve room", [e])
         }
+    }
+
+    public static async createRoomForm(req: Request, res: Response){
+        let status:{[x:string]:any} = {};
+        let privacy:{[x:string]:any} = {}
+        roomStatusMap.forEach((val, key)=>{
+            status[key] = val;
+        });
+        roomPrivacyMap.forEach((val, key)=>{
+            privacy[key] = val;
+        });
+        return JsonResponse.success(res, "Request was successful", {status, privacy})
     }
     public static async updateRoom(req:Request, res:Response){
         let id = req.params.id;
