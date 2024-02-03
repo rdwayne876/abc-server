@@ -5,6 +5,7 @@ import { IRoomModel, Room, StatusEnum } from '../../schema/room';
 import { isObjectIdOrHexString } from 'mongoose';
 import { body, validationResult } from 'express-validator';
 import { IRoom, roomPrivacyMap, roomStatusMap } from '../../interfaces/room';
+import { transformMapToObject } from '../../helpers/Utility.helper';
 
 export class RoomController{
     public static createRoomValidators = [
@@ -19,8 +20,16 @@ export class RoomController{
 
     public static async getAllRooms(req:Request, res:Response){
         try{
-            let rooms = await Room.find();
-            return JsonResponse.success(res, "Successfully retrieved all rooms", {rooms});
+            let user_id = req.query.user_id;
+            let rooms:IRoom[] = [];
+            if(isObjectIdOrHexString(user_id)){
+                rooms = await Room.find({creator: user_id})
+            }
+            let roomStatusOptions = transformMapToObject(roomStatusMap);
+            let roomPrivacyOptions = transformMapToObject(roomPrivacyMap);
+
+            // rooms = await Room.find();
+            return JsonResponse.success(res, "Successfully retrieved all rooms", {rooms, statusOptions:roomStatusOptions, privacyOptions: roomPrivacyOptions});
         }catch(e: any){
             return JsonResponse.error(res, "Unable to retrieve rooms",[], HttpStatusCode.INTERNAL_SERVER_ERROR);
         }
