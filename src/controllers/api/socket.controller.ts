@@ -446,6 +446,18 @@ export class SocketController{
                 socket.emit("leave-room");
                 socket.leave(room?.id);
 
+                let sockets = await socket.nsp.in(room?.id).fetchSockets();
+
+                if(sockets.length < 2){
+                    // Create a timeout manager which will only timeout a single socket instead of everyone connected.
+                    sockets[0].emit("waiting", {main_message:"Not enough players closing server.", side_message:[]})
+                    timeoutManager(sockets[0] as unknown as Socket, room?.id, 5, 1000, {name: "leave-room", data: {}});
+                    room?.updateOne({status: StatusEnum.OFFLINE}).exec();
+                    console.log(room?.status);
+                    console.log(StatusEnum.OFFLINE)
+
+                }
+
 
                 
             });
