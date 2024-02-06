@@ -87,7 +87,6 @@ export class SocketController{
                     // io.socketsJoin(userInfo.room_id);
                     // let connectedSockets = await io.in(userInfo.room_id).fetchSockets();
                     connectedSockets = await socket.nsp.in(userInfo.room_id).fetchSockets();
-                    console.log(connectedSockets.length)
 
                     // The additionaly condition is to prevent me removing user if the user is the only one that joins the server.
                     if(room!.player_limit >= connectedSockets.length && connectedSockets.length > 1){
