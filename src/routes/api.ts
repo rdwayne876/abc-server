@@ -30,6 +30,7 @@ router.patch('/users/:id',isAuthorized,...UserController.updateUserValidator, Us
 router.get('/userprofile',isAuthorized ,UserController.getUserProfile);
 router.get('/rooms', RoomController.getAllRooms);
 router.post('/rooms',isAuthorized, ...RoomController.createRoomValidators,RoomController.createRoom);
+router.get("/rooms/create",RoomController.createRoomForm);
 router.get('/rooms/:id',isAuthorized,RoomController.getRoomById);
 router.patch('/rooms/:id',isAuthorized,RoomController.updateRoom);
 router.delete('/rooms/:id',isAuthorized,RoomController.deleteRoom);

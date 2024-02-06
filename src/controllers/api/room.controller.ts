@@ -1,10 +1,11 @@
 import { Request, Response } from 'express';
 import { JsonResponse } from '../../helpers/JsonResponse.helper';
 import HttpStatusCode from '../../helpers/StatusCodes.helper';
-import { IRoomModel, Room } from '../../schema/room';
+import { IRoomModel, Room, StatusEnum } from '../../schema/room';
 import { isObjectIdOrHexString } from 'mongoose';
 import { body, validationResult } from 'express-validator';
 import { IRoom, roomPrivacyMap, roomStatusMap } from '../../interfaces/room';
+import { transformMapToObject } from '../../helpers/Utility.helper';
 
 export class RoomController{
     public static createRoomValidators = [
@@ -19,8 +20,16 @@ export class RoomController{
 
     public static async getAllRooms(req:Request, res:Response){
         try{
-            let rooms = await Room.find();
-            return JsonResponse.success(res, "Successfully retrieved all rooms", {rooms});
+            let user_id = req.query.user_id;
+            let rooms:IRoom[] = [];
+            if(isObjectIdOrHexString(user_id)){
+                rooms = await Room.find({creator: user_id})
+            }
+            let roomStatusOptions = transformMapToObject(roomStatusMap);
+            let roomPrivacyOptions = transformMapToObject(roomPrivacyMap);
+
+            // rooms = await Room.find();
+            return JsonResponse.success(res, "Successfully retrieved all rooms", {rooms, statusOptions:roomStatusOptions, privacyOptions: roomPrivacyOptions});
         }catch(e: any){
             return JsonResponse.error(res, "Unable to retrieve rooms",[], HttpStatusCode.INTERNAL_SERVER_ERROR);
         }
@@ -43,7 +52,10 @@ export class RoomController{
                 return JsonResponse.error(res, "Unable to create room", ["Existing room found with this name"])
             }
             let room = new Room(reqBody);
-
+            let userRooms = await Room.find({creator: reqBody.creator});
+            if( userRooms.length >=3){
+                return JsonResponse.error(res, "Unable to create room", ["You have reached the maximum allowed rooms"])
+            }
             let newRoom = await room.save();
             if(!newRoom){
                 return JsonResponse.error(res, "Unable to create room", ["Room data not being saved"])
@@ -72,6 +84,18 @@ export class RoomController{
         }catch(e:any){
             return JsonResponse.error(res, "Unable to retrieve room", [e])
         }
+    }
+
+    public static async createRoomForm(req: Request, res: Response){
+        let status:{[x:string]:any} = {};
+        let privacy:{[x:string]:any} = {}
+        roomStatusMap.forEach((val, key)=>{
+            status[key] = val;
+        });
+        roomPrivacyMap.forEach((val, key)=>{
+            privacy[key] = val;
+        });
+        return JsonResponse.success(res, "Request was successful", {status, privacy})
     }
     public static async updateRoom(req:Request, res:Response){
         let id = req.params.id;
