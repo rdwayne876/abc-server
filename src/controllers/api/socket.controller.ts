@@ -70,24 +70,39 @@ export class SocketController{
                         return socket.emit("room_connect_error", "Room is currently unavailable");
                     }
                     room?.updateOne({status: StatusEnum.ONLINE}).exec();
+                    let connectedSockets = await socket.nsp.in(userInfo.room_id).fetchSockets();
+
+                    //find out if user is already connected.
+                    let repeatingsocket = connectedSockets.find((socket)=>{
+                        return (socket.data as SocketData).user.id == userdata.id;
+                    })
+                    if(repeatingsocket){
+                        socket.leave(room?.id);
+                        return socket.emit("room_connect_error", "This user is already connected");
+                    }
+
                     // Joins a room using the room id as a iterator.
                     socket.join(room?.id);
 
                     // io.socketsJoin(userInfo.room_id);
-                    // let connectedSockets = await socket.nsp.in(userInfo.room_id).fetchSockets();
-                    let connectedSockets = await io.in(userInfo.room_id).fetchSockets();
+                    // let connectedSockets = await io.in(userInfo.room_id).fetchSockets();
+                    connectedSockets = await socket.nsp.in(userInfo.room_id).fetchSockets();
+                    console.log(connectedSockets.length)
 
-                    if(room?.player_limit == connectedSockets.length){
+                    // The additionaly condition is to prevent me removing user if the user is the only one that joins the server.
+                    if(room!.player_limit >= connectedSockets.length && connectedSockets.length > 1){
                         // Room full but socket is the creater. I will kick out a random nobody..lol
                         if(room?.creator! == (userdata.id as unknown as ObjectId)){
                             let rand = Math.floor(Math.random()* connectedSockets.length);
+                            console.log("here")
                             connectedSockets[rand].leave(userInfo.room_id); //ah so unfortunate lol.
                         }else{
                             // emit to socket that they cannot connect
                             socket.emit("room_connect_error", "Room limit reached");
                         }
                     }
-                    socket.join(userInfo.room_id);
+
+
 
 
 
@@ -103,6 +118,8 @@ export class SocketController{
                         current_round: 0,
                     }
                     socket.data = {user: initialUserData};
+
+                    
                     // emit to all connected players the data of those who are currently connected to the room.
                     socket.nsp.to(userInfo.room_id).emit('player_connected',{players : sockets.map((socket)=>socket.data.user), isFull: room?.player_limit == sockets.length});
                 }catch(error:any){
@@ -149,8 +166,10 @@ export class SocketController{
                 // Change room status to inProgress
 
                 room?.updateOne({status: StatusEnum.INPROGRESS}).exec();
+                if(connectedSockets.length < 2){
+                    return socket.emit("room_connect_error", "Cannot start game with only one player");
+                }
                 // choose dictator and emit choose_letter event.
-
                 SocketController.chooseDictator(connectedSockets);
                 if(socket.data.user.isDictator){
                     socket.emit("choose_letter");
@@ -450,14 +469,12 @@ export class SocketController{
 
                 if(sockets.length < 2){
                     // Create a timeout manager which will only timeout a single socket instead of everyone connected.
-                    sockets[0].emit("waiting", {main_message:"Not enough players closing server.", side_message:[]})
-                    timeoutManager(sockets[0] as unknown as Socket, room?.id, 5, 1000, {name: "leave-room", data: {}});
-                    room?.updateOne({status: StatusEnum.OFFLINE}).exec();
-                    console.log(room?.status);
-                    console.log(StatusEnum.OFFLINE)
-
+                    if(sockets.length > 0){
+                        sockets[0].emit("waiting", {main_message:"Not enough players closing server.", side_message:[]})
+                        timeoutManager(sockets[0] as unknown as Socket, room?.id, 5, 1000, {name: "leave-room", data: {}});
+                    }
+                    room?.updateOne({status: StatusEnum.OFFLINE}).exec();                    
                 }
-
 
                 
             });

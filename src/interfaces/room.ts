@@ -15,8 +15,8 @@ export interface IRoom{
 
 export const roomStatusMap = new Map([
     [0, "Online"],
-    [1, "Offline"],
-    [2, "InProgress"]
+    [1, "In Progress"],
+    [2, "Offline"]
 ]);
 
 export const roomPrivacyMap = new Map([
