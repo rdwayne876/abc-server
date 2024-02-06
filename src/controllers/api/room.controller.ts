@@ -52,7 +52,10 @@ export class RoomController{
                 return JsonResponse.error(res, "Unable to create room", ["Existing room found with this name"])
             }
             let room = new Room(reqBody);
-
+            let userRooms = await Room.find({creator: reqBody.creator});
+            if( userRooms.length >=3){
+                return JsonResponse.error(res, "Unable to create room", ["You have reached the maximum allowed rooms"])
+            }
             let newRoom = await room.save();
             if(!newRoom){
                 return JsonResponse.error(res, "Unable to create room", ["Room data not being saved"])
